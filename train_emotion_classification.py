@@ -5,13 +5,17 @@ import torchaudio
 from PIL import Image
 import torch
 import torchvision.transforms as transforms
-from torchvision import  models
+from torchvision import models
 
 from torch.utils.data import DataLoader
 from transformers import BertTokenizer, BertModel
 import torch.optim as optim
 import torch.nn as nn
+import warnings
 from tqdm import tqdm
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
+
 class MultimodalTransformer(nn.Module):
     def __init__(self,
                  audio_feat_dim=128,
@@ -44,25 +48,48 @@ class MultimodalTransformer(nn.Module):
         B = audio_feat.size(0)
 
         # 投影到统一hidden size
-        a = self.audio_proj(audio_feat)    # (B, T_a, fusion_hidden=768)
-        i = self.image_proj(image_feat)    # (B, 1, 768)
-        t=self.text_proj(text_feat)
+        a = self.audio_proj(audio_feat)  # (B, T_a, fusion_hidden=768)
+        i = self.image_proj(image_feat)  # (B, 1, 768)
+        t = self.text_proj(text_feat)
         # 三模态特征拼接
-        x = torch.cat([a, t, i], dim=1)     # (B, T_all, 768)
+        x = torch.cat([a, t, i], dim=1)  # (B, T_all, 768)
 
         # 注意力mask（可选）
         mask = None
 
         # Transformer处理
-        x = x.transpose(0, 1)               # (T_all, B, 768)
+        x = x.transpose(0, 1)  # (T_all, B, 768)
         x = self.transformer(x, src_key_padding_mask=mask)
-        x = x.transpose(0, 1)               # (B, T_all, 768)
+        x = x.transpose(0, 1)  # (B, T_all, 768)
 
         # 取第一个token作为代表（可以换成池化）
-        cls = x[:, 0, :]                    # (B, 768)
-        logits = self.cls_head(cls)         # (B, num_classes)
+        cls = x[:, 0, :]  # (B, 768)
+        logits = self.cls_head(cls)  # (B, num_classes)
 
         return logits
+
+def custom_collate_fn(batch):
+    audios, texts, images, labels = zip(*batch)
+
+    # audio padding到同一长度
+    max_audio_len = max([a.shape[0] for a in audios])  # 找到batch里最长的time_steps
+    padded_audios = []
+    for a in audios:
+        pad_len = max_audio_len - a.shape[0]
+        if pad_len > 0:
+            padding = torch.zeros(pad_len, a.shape[1])  # (pad_len, n_mels)
+            a = torch.cat([a, padding], dim=0)  # 补到最长
+        padded_audios.append(a)
+    audios = torch.stack(padded_audios, dim=0)  # (B, T, n_mels)
+
+    # images直接堆叠
+    images = torch.stack(images, dim=0)  # (B, 3, 224, 224)
+
+    # labels也堆叠
+    labels = torch.tensor(labels)
+
+    return audios, texts, images, labels
+
 class CAERMultimodalDataset(Dataset):
     def __init__(self, audio_root, image_root, text_root, label_map, tokenizer, max_length=128, transform=None):
         super().__init__()
@@ -133,90 +160,125 @@ class CAERMultimodalDataset(Dataset):
         with open(text_path, "r", encoding="utf-8") as f:
             return f.read().strip()
 
-# 准备
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# 数据路径
-audio_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_audio"
-image_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_image"
-text_root  = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_LLM-text"
+if __name__ == "__main__":
+    # 准备
+    loss_list = []
+    acc_list = []
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-label_map = {
-    "Anger": 0,
-    "Disgust": 1,
-    "Happy": 2,
-    "Sad": 3
-}
+    # 数据路径
+    audio_root = "E:/New_project/MiniGPT-4/extract_data/CAER_train_audio"
+    image_root = "E:/New_project/MiniGPT-4/extract_data/CAER_train_image"
+    text_root = ("E:/New_project/MiniGPT-4/extract_data/CAER_train_LLM_text")
 
-# 图像预处理
-transform = transforms.Compose([
-    transforms.Resize((224,224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
-])
+    label_map = {
+        "Anger": 0,
+        "Neutral": 1,
+        "Happy": 2,
+        "Sad": 3
+    }
 
-# Tokenizer
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', cache_dir="E:/New_project/MiniGPT-4/checkpoints/bert")
+    # 图像预处理
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
 
-# Dataset & DataLoader
-dataset = CAERMultimodalDataset(audio_root, image_root, text_root, label_map, tokenizer, transform=transform)
-train_loader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4)
+    # Tokenizer
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', cache_dir="E:/New_project/MiniGPT-4/checkpoints/bert")
 
-# Text encoder and vision encoder
-text_encoder = BertModel.from_pretrained('bert-base-uncased', cache_dir="E:/New_project/MiniGPT-4/checkpoints/bert").to(device).eval()
-vision_encoder = models.resnet50(pretrained=True)
-vision_encoder.fc = nn.Identity()
-vision_encoder = vision_encoder.to(device).eval()
+    # Dataset & DataLoader
+    dataset = CAERMultimodalDataset(audio_root, image_root, text_root, label_map, tokenizer, transform=transform)
+    train_loader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4,collate_fn=custom_collate_fn)
 
-# Multimodal Transformer
-model = MultimodalTransformer()
-model.to(device)
+    # Text encoder and vision encoder
+    text_encoder = BertModel.from_pretrained('bert-base-uncased', cache_dir="E:/New_project/MiniGPT-4/checkpoints/bert").to(
+        device).eval()
+    vision_encoder = models.resnet50(pretrained=True)
+    vision_encoder.fc = nn.Identity()
+    vision_encoder = vision_encoder.to(device).eval()
 
-# Optimizer
-optimizer = optim.AdamW(model.parameters(), lr=2e-4)
-criterion = nn.CrossEntropyLoss()
+    # Multimodal Transformer
+    model = MultimodalTransformer()
+    model.to(device)
 
-# 训练
-num_epochs = 5
-ckpt_save_path = "E:/New_project/MiniGPT-4/checkpoints/finetuned_model.pth"
+    # Optimizer
+    optimizer = optim.AdamW(model.parameters(), lr=2e-4)
+    criterion = nn.CrossEntropyLoss()
 
-for epoch in range(num_epochs):
-    model.train()
-    total_loss = 0
-    total_correct = 0
+    # 训练
+    num_epochs = 20
+    ckpt_save_path = "E:/New_project/MiniGPT-4/checkpoints/finetuned_model_train.pth"
 
-    pbar = tqdm(train_loader)
-    for audio_feats, texts, img_feats, labels in pbar:
-        audio_feats = audio_feats.to(device)
-        img_feats = img_feats.to(device)
-        labels = labels.to(device)
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
+        total_correct = 0
 
-        # 文本处理
-        input_ids, attn_mask = tokenizer(list(texts), padding=True, truncation=True, max_length=128, return_tensors="pt").input_ids, tokenizer(list(texts), padding=True, truncation=True, max_length=128, return_tensors="pt").attention_mask
-        input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
+        pbar = tqdm(train_loader)
+        for audio_feats, texts, img_feats, labels in pbar:
+            audio_feats = audio_feats.to(device)
+            img_feats = img_feats.to(device)
+            labels = labels.to(device)
 
-        with torch.no_grad():
-            text_feats = text_encoder(input_ids=input_ids, attention_mask=attn_mask).last_hidden_state
+            # 文本处理
+            input_ids, attn_mask = tokenizer(list(texts), padding=True, truncation=True, max_length=128,
+                                             return_tensors="pt").input_ids, tokenizer(list(texts), padding=True,
+                                                                                       truncation=True, max_length=128,
+                                                                                       return_tensors="pt").attention_mask
+            input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
 
-        with torch.no_grad():
-            img_feats = vision_encoder(img_feats).unsqueeze(1)  # (B,1,2048)
+            with torch.no_grad():
+                text_feats = text_encoder(input_ids=input_ids, attention_mask=attn_mask).last_hidden_state
 
-        logits = model(audio_feats, text_feats, img_feats, attn_mask)
+            with torch.no_grad():
+                img_feats = vision_encoder(img_feats).unsqueeze(1)  # (B,1,2048)
 
-        loss = criterion(logits, labels)
-        preds = logits.argmax(dim=-1)
-        acc = (preds == labels).float().mean()
+            logits = model(audio_feats, text_feats, img_feats, attn_mask)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            loss = criterion(logits, labels)
+            preds = logits.argmax(dim=-1)
+            acc = (preds == labels).float().mean()
 
-        total_loss += loss.item()
-        total_correct += acc.item()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        pbar.set_description(f"Epoch {epoch+1} | Loss: {total_loss/len(pbar):.4f} | Acc: {total_correct/len(pbar):.4f}")
+            total_loss += loss.item()
+            total_correct += acc.item()
 
-    # 每个epoch保存一次
-    torch.save(model.state_dict(), ckpt_save_path)
+            pbar.set_description(
+                f"Epoch {epoch + 1} | Loss: {total_loss / len(pbar):.4f} | Acc: {total_correct / len(pbar):.4f}")
+        loss_list.append(total_loss / len(pbar))
+        acc_list.append(total_correct / len(pbar))
+            # 每个epoch保存一次
+        torch.save(model.state_dict(), ckpt_save_path)
 
-print("训练完成")
+    print("训练完成")
+    import matplotlib.pyplot as plt
+
+    # 绘制loss曲线
+    plt.figure()
+    plt.plot(range(1, num_epochs + 1), loss_list, label='Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.legend()
+    plt.grid()
+    plt.savefig("E:/New_project/MiniGPT-4/checkpoints/loss_curve.png")
+    plt.close()
+
+    # 绘制accuracy曲线
+    plt.figure()
+    plt.plot(range(1, num_epochs + 1), acc_list, label='Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Training Accuracy Curve')
+    plt.legend()
+    plt.grid()
+    plt.savefig("E:/New_project/MiniGPT-4/checkpoints/acc_curve.png")
+    plt.close()
+
+    print("训练曲线已保存！")

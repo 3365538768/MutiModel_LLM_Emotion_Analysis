@@ -69,7 +69,7 @@ class MultimodalTransformer(nn.Module):
             d_model=text_hidden, nhead=n_heads,
             dim_feedforward=dim_feedforward
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=4)
         # 分类头
         self.cls_head = nn.Linear(text_hidden, num_classes)
 
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     #     args.ckpt, device=args.device
     # )
     model = MultimodalTransformer()
-    ckpt_path = "E:/New_project/MiniGPT-4/checkpoints/random_init.ckpt"
+    ckpt_path = "E:/New_project/MiniGPT-4/checkpoints/finetuned_model.pth"
     torch.save(model.state_dict(), ckpt_path)
     audio="E:/New_project/MiniGPT-4/test_data/extracted_audio.wav"
     image="E:/New_project/MiniGPT-4/test_data/middle_frame.jpg"

@@ -30,12 +30,12 @@ def read_txt(path):
 
 if __name__ == "__main__":
     # 输入路径（分别是前面处理得到的3个目录）
-    asr_root = "E:/New_project/MiniGPT-4/extract_data/CAER-validation-asr"
-    img_msg_root = "E:/New_project/MiniGPT-4/extract_data/CAER-validation-image-text"
-    voice_msg_root = "E:/New_project/MiniGPT-4/extract_data/CAER-validation-audio-text"  # 注意这个路径是音频情感分析得到的文本
+    asr_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_asr"
+    img_msg_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_image_text"
+    voice_msg_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_audio_text"  # 注意这个路径是音频情感分析得到的文本
     # （如果之前命名不同，请改成你的实际audio-text保存路径）
 
-    output_root = "E:/New_project/MiniGPT-4/extract_data/CAER-validation-LLM-text"
+    output_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_LLM_text"
     os.makedirs(output_root, exist_ok=True)
 
     for emotion_folder in os.listdir(asr_root):

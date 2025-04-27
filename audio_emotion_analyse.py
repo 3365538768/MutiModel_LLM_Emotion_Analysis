@@ -8,14 +8,12 @@ import os
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-Audio-Chat",
                                           trust_remote_code=True,
                                           cache_dir="E:/New_project/MiniGPT-4/checkpoints/Qwen",
-
                                           )
 
 model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen-Audio-Chat",
                                              device_map="cuda",
                                              trust_remote_code=True,
-                                             cache_dir="E:/New_project/MiniGPT-4/checkpoints/Qwen",
-                                         ).eval()
+                                             cache_dir="E:/New_project/MiniGPT-4/checkpoints/Qwen",).eval()
 def get_audio_response(audio_path,audio_question):
     # Note: The default behavior now has injection attack prevention off.
     query = tokenizer.from_list_format([
@@ -43,7 +41,7 @@ def extract_audio(video_path, output_audio_path):
 if __name__ == "__main__":
     # 你的数据集路径
     input_root = "E:/New_project/MiniGPT-4/CAER_validation"
-    output_root = "E:/New_project/MiniGPT-4/CAER_validation_audio"
+    output_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_audio_text"
     os.makedirs(output_root, exist_ok=True)
 
     # 要问的问题

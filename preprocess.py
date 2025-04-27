@@ -46,8 +46,6 @@ def extract_text_from_audio(audio_path: str, output_text_path: str) -> None:
 if __name__ == "__main__":
     # 输入数据集根目录
     input_root = "E:/New_project/MiniGPT-4/CAER_validation"
-
-    # 输出根目录
     output_image_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_image"
     output_audio_root = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_audio"
     output_asr_root   = "E:/New_project/MiniGPT-4/extract_data/CAER_validation_asr"
