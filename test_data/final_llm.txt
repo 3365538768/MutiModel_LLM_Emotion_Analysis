@@ -1,0 +1,6 @@
+what is the person's emotion base on the following information?
+Information1: No I don't, to hell with her, she left me!;
+Information2:The person, wearing a blue jacket and red scarf, is sitting on the couch and holding a cell phone in their left hand. They have a surprised and concerned expression on their face.;
+Information3:Based on the voice, it sounds like this person is angry in this sentence, possibly expressing frustration or disappointment.
+
+Based on the information provided, the person is likely experiencing anger or frustration. The use of the phrase "to hell with her" and the surprised and concerned expression on their face suggest that they may be feeling a range of emotions, including shock, disappointment, and possibly even betrayal. The tone of their voice also suggests that they are expressing anger or frustration, as they use a harsh and dismissive language.
